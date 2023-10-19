@@ -16,7 +16,7 @@ const app = express();
 app.use(helmet());
 
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://diplom.films.nomoredomainsrocks.ru'],
+  origin: ['http://localhost:3001', ''],
   credentials: true,
 }));
 
