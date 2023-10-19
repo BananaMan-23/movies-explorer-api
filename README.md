@@ -14,4 +14,4 @@
 
 IP []
 
-### Публичный сервер находится по адресу: [https://api.backend.diplom.nomoredomainsrocks.ru]
+### Публичный сервер находится по адресу: [https://api.diplom.films.nomoredomainsrocks.ru]
