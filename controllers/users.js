@@ -1,114 +1,86 @@
-const { NODE_ENV, JWT_SECRET } = process.env;
+const { default: mongoose } = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
-const NotFoundError = require('../utils/notFoundError');
-const UnAuthorizedError = require('../utils/unAuthorizedError');
-const ConflictError = require('../utils/conflictError');
-const { OK, CREATED } = require('../utils/constants');
-const { NOT_UNIQE } = require('../utils/constants');
 
-const getUser = (req, res, next) => {
-  const id = req.user._id;
-  User.findById(id)
-    .then((user) => {
-      if (!user) {
-        return next(new NotFoundError('Не найден'));
-      }
-      return res.status(OK).send({ name: user.name, email: user.email });
-    })
-    .catch((err) => next(err));
-};
+const { BadRequestError } = require('../errors/BadRequestError');
+const { NotFoundError } = require('../errors/NotFoundError');
+const { ConflictError } = require('../errors/ConflictError');
 
-const createUser = (req, res, next) => {
+const { NODE_ENV, JWT_SECRET } = process.env;
+
+module.exports.createUser = (req, res, next) => {
   const {
-    name,
-    email,
-    password,
+    name, email, password,
   } = req.body;
 
   bcrypt.hash(password, 10)
     .then((hash) => User.create({
-      name,
-      email,
-      password: hash,
-    }))
-    .then((newUser) => res.status(CREATED).send(
-      {
-        name: newUser.name,
-        email: newUser.email,
-        _id: newUser._id,
-      },
-    ))
-    .catch((err) => {
-      if (err.code === NOT_UNIQE) {
-        return next(new ConflictError('Пользователь уже существует'));
-      }
-      return next(err);
-    });
+      name, email, password: hash,
+    })
+      .then((user) => res.send({
+        _id: user._id, email: user.email, name: user.name,
+      }))
+      .catch((err) => {
+        if (err.code === 11000) {
+          next(new ConflictError('Пользователь c данным email уже зарегистрирован'));
+        } else if (err instanceof mongoose.Error.ValidationError) {
+          next(new BadRequestError(err.message));
+        } else {
+          next(err);
+        }
+      }));
 };
 
-const updateUser = (req, res, next) => {
+module.exports.updateUserInfo = (req, res, next) => {
   const { name, email } = req.body;
-  User.findByIdAndUpdate(
-    req.user._id,
-    { name, email },
-    {
-      new: true,
-      runValidators: true,
-    },
-  )
-    .then((user) => {
-      if (!user) {
-        return next(new NotFoundError('Не найден'));
-      }
-      return res.status(OK).send({ name: user.name, email: user.email });
-    })
+  User.findByIdAndUpdate(req.user._id, { name, email }, { new: 'true', runValidators: true })
+    .orFail()
+    .then((user) => res.send(user))
     .catch((err) => {
-      if (err.code === NOT_UNIQE) {
-        return next(new ConflictError('Email уже существует'));
+      if (err instanceof mongoose.Error.ValidationError) {
+        next(new BadRequestError(err.message));
+      } else if (err instanceof mongoose.Error.DocumentNotFoundError) {
+        next(new NotFoundError('Пользователь не найден'));
+      } else {
+        next(err);
       }
-      return next(err);
     });
 };
 
-const login = (req, res, next) => {
-  const { email, password } = req.body;
-
-  User.findOne({ email }).select('+password')
+module.exports.getUserInfo = (req, res, next) => {
+  const userId = req.user._id;
+  User.findById(userId)
+    .orFail()
     .then((user) => {
-      if (!user) {
-        return next(new UnAuthorizedError('Пользователь не зарегистрирован'));
-      }
-
-      return bcrypt.compare(password, user.password)
-        .then((matched) => {
-          if (!matched) {
-            return next(new UnAuthorizedError('Неверный email или пароль'));
-          }
-
-          const token = jwt.sign({ _id: user._id }, NODE_ENV ? JWT_SECRET : 'secret-key', { expiresIn: '7d' });
-          res.cookie('jwt', token, {
-            maxAge: 3600000 * 24 * 7,
-            httpOnly: true,
-            sameSite: true,
-          });
-
-          return res.status(OK).send({ message: `Пользователь ${user.email} успешно зарегистрирован` });
-        })
-        .catch((err) => next(err));
+      res.send(user);
     })
-    .catch((err) => next(err));
+    .catch((err) => {
+      if (err instanceof mongoose.Error.CastError) {
+        next(new BadRequestError('Переданы некорректные данные'));
+      } else if (err instanceof mongoose.Error.DocumentNotFoundError) {
+        next(new NotFoundError('Пользователь не найден.'));
+      } else {
+        next(err);
+      }
+    });
 };
 
-const deleteCookies = (req, res) => {
-  res.status(OK).clearCookie('jwt').send({ message: 'Данные удалены' });
+module.exports.login = (req, res, next) => {
+  const { email, password } = req.body;
+  return User.findUserByCredentials(email, password)
+    .then((user) => {
+      const token = jwt.sign({ _id: user._id }, NODE_ENV ? JWT_SECRET : 'secret-key', { expiresIn: '7d' });
+      res.cookie('jwt', token, {
+        maxAge: 3600000 * 24 * 7,
+        httpOnly: true,
+        sameSite: true,
+      });
+      return res.status(200).send({ message: `Успешный вход пользователя ${user.email}` });
+    })
+    .catch(next);
 };
 
-module.exports = {
-  createUser,
-  updateUser,
-  login,
-  getUser,
-  deleteCookies,
+module.exports.deleteCookies = (req, res) => {
+  res.status(200).clearCookie('jwt').send({ message: 'Данные удалены' });
 };

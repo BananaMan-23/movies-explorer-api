@@ -1,28 +1,21 @@
+const { default: mongoose } = require('mongoose');
 const Movie = require('../models/movie');
-const NotFoundError = require('../utils/notFoundError');
-const ForbiddenError = require('../utils/forBiddenError');
-const { OK, CREATED } = require('../utils/constants');
 
-const getMovies = (req, res, next) => {
-  const idCurrentUser = req.user._id;
-  Movie.find({ owner: idCurrentUser })
-    .then((movies) => res.status(OK).send(movies))
+const { BadRequestError } = require('../errors/BadRequestError');
+const { NotFoundError } = require('../errors/NotFoundError');
+const { ForBiddenError } = require('../errors/ForBiddenError');
+
+module.exports.getMovies = (req, res, next) => {
+  const owner = req.user._id;
+  Movie.find({ owner })
+    .then((movies) => res.send(movies))
     .catch((err) => next(err));
 };
 
-const createMovie = (req, res, next) => {
+module.exports.createMovie = (req, res, next) => {
   const {
-    country,
-    director,
-    duration,
-    year,
-    description,
-    image,
-    trailerLink,
-    thumbnail,
-    nameRU,
-    nameEN,
-    movieId,
+    country, director, duration, year, description, image,
+    trailerLink, thumbnail, movieId, nameRU, nameEN,
   } = req.body;
   Movie.create({
     country,
@@ -33,35 +26,50 @@ const createMovie = (req, res, next) => {
     image,
     trailerLink,
     thumbnail,
+    movieId,
     nameRU,
     nameEN,
-    movieId,
-    owner: req.user,
+    owner: req.user._id,
   })
-    .then((movie) => res.status(CREATED).send(movie))
-    .catch((err) => next(err));
-};
-
-const deleteMovie = (req, res, next) => {
-  const { id } = req.params;
-  const idCurrentUser = req.user._id;
-  Movie.findById(id)
     .then((movie) => {
-      if (!movie) {
-        return next(new NotFoundError('Фильм не найден.'));
-      }
-      if (movie.owner.toString() !== idCurrentUser) {
-        return next(new ForbiddenError('У пользователя нет прав на удаление этого фильма.'));
-      }
-      return movie.deleteOne()
-        .then(() => res.status(OK).send({ message: `Фильм ${id} удален.` }))
-        .catch((err) => next(err));
+      res.send(movie);
     })
-    .catch((err) => next(err));
+    .catch((err) => {
+      if (err instanceof mongoose.Error.ValidationError) {
+        next(new BadRequestError(err.message));
+      } else {
+        next(err);
+      }
+    });
 };
 
-module.exports = {
-  getMovies,
-  createMovie,
-  deleteMovie,
+module.exports.deleteMovie = (req, res, next) => {
+  Movie.findById(req.params.movieId)
+    .orFail()
+    .then((movie) => {
+      if (!movie.owner.equals(req.user._id)) {
+        throw new ForBiddenError('Нельзя удалить фильм другого пользователя');
+      }
+      Movie.deleteOne(movie)
+        .orFail()
+        .then(() => {
+          res.send({ message: `Фильм _id:${movie._id} удален` });
+        })
+        .catch((err) => {
+          if (err instanceof mongoose.Error.CastError) {
+            next(new BadRequestError('Переданы некорректные данные'));
+          } else if (err instanceof mongoose.Error.DocumentNotFoundError) {
+            next(new NotFoundError('Фильм не найден'));
+          } else {
+            next(err);
+          }
+        });
+    })
+    .catch((err) => {
+      if (err.name === 'DocumentNotFoundError') {
+        next(new NotFoundError('Фильм не найден'));
+      } else {
+        next(err);
+      }
+    });
 };

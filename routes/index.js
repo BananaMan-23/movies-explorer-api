@@ -1,50 +1,36 @@
 const router = require('express').Router();
-const { celebrate, Joi, errors } = require('celebrate');
-const userRoutes = require('./users');
-const movieRoutes = require('./movies');
-const { createUser, login, deleteCookies } = require('../controllers/users');
+const { celebrate, Joi } = require('celebrate');
+const users = require('./users');
+const movies = require('./movies');
+const { createUser, login } = require('../controllers/users');
+
+const { deleteCookies } = require('../controllers/users');
+
 const auth = require('../middlewares/auth');
-const errorHandler = require('../middlewares/errorHandler');
-const NotFoundError = require('../utils/notFoundError');
-const { requestLog, errorLog } = require('../middlewares/logger');
-
-router.use(requestLog);
-
-router.get('/crash-test', () => {
-  setTimeout(() => {
-    throw new Error('Сервер сейчас упадёт');
-  }, 0);
-});
+const { NotFoundError } = require('../errors/NotFoundError');
 
 router.post('/signup', celebrate({
   body: Joi.object().keys({
+    name: Joi.string().min(2).max(30).required(),
     email: Joi.string().required().email(),
-    password: Joi.string().required().min(8),
-    name: Joi.string().required().min(2).max(30),
+    password: Joi.string().required(),
   }),
 }), createUser);
-
 router.post('/signin', celebrate({
   body: Joi.object().keys({
     email: Joi.string().required().email(),
-    password: Joi.string().required().min(8),
+    password: Joi.string().required(),
   }),
 }), login);
 
-router.use(auth);
-
-router.use('/users', userRoutes);
-
-router.use('/movies', movieRoutes);
-
 router.use('/signout', deleteCookies);
 
-router.use((req, res, next) => next(new NotFoundError('Не найден')));
+router.use(auth);
+router.use('/users', users);
+router.use('/movies', movies);
 
-router.use(errorLog);
-
-router.use(errors());
-
-router.use(errorHandler);
+router.use('*', (req, res, next) => {
+  next(new NotFoundError('Страница не найдена'));
+});
 
 module.exports = router;
