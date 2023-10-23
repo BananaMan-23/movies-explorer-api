@@ -12,6 +12,6 @@
 - валидация введённых пользователем данных.
 ### Ссылка на репозиторий [https://github.com/BananaMan-23/movies-explorer-api]
 
-IP []
+IP [51.250.3.79]
 
-### Публичный сервер находится по адресу: []
+### Публичный сервер находится по адресу: [https://api.diplom.films.nomoredomainsrocks.ru]
