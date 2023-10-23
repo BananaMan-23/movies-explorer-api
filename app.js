@@ -16,7 +16,7 @@ const { PORT = 3001, DB_URL = 'mongodb://127.0.0.1:27017/bitfilmsdb' } = process
 const app = express();
 
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://api.diplom.films.nomoredomainsrocks.ru'],
+  origin: ['http://localhost:3000', 'https://diplom.films.nomoredomainsrocks.ru'],
   credentials: true,
 }));
 
