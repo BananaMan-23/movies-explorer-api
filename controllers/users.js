@@ -32,19 +32,43 @@ module.exports.createUser = (req, res, next) => {
       }));
 };
 
+// module.exports.updateUserInfo = (req, res, next) => {
+//   const { name, email } = req.body;
+//   User.findByIdAndUpdate(req.user._id, { name, email }, { new: 'true', runValidators: true })
+//     .orFail()
+//     .then((user) => res.send(user))
+//     .catch((err) => {
+//       if (err instanceof mongoose.Error.ValidationError) {
+//         next(new BadRequestError(err.message));
+//       } else if (err instanceof mongoose.Error.DocumentNotFoundError) {
+//         next(new NotFoundError('Пользователь не найден'));
+//       } else {
+//         next(err);
+//       }
+//     });
+// };
+
 module.exports.updateUserInfo = (req, res, next) => {
   const { name, email } = req.body;
-  User.findByIdAndUpdate(req.user._id, { name, email }, { new: 'true', runValidators: true })
-    .orFail()
-    .then((user) => res.send(user))
-    .catch((err) => {
-      if (err instanceof mongoose.Error.ValidationError) {
-        next(new BadRequestError(err.message));
-      } else if (err instanceof mongoose.Error.DocumentNotFoundError) {
-        next(new NotFoundError('Пользователь не найден'));
-      } else {
-        next(err);
+  User.findByIdAndUpdate(
+    req.user._id,
+    { name, email },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .then((user) => {
+      if (!user) {
+        return next(new NotFoundError('Не найден'));
       }
+      return res.status(200).send({ name: user.name, email: user.email });
+    })
+    .catch((err) => {
+      if (err.code === 11000) {
+        return next(new ConflictError('Email уже существует'));
+      }
+      return next(err);
     });
 };
 
